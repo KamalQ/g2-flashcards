@@ -99,6 +99,17 @@ export function selectVisibleWindow(rows, selectedOption, maxVisibleLines = MAIN
     return selStart;
   }
 
+  // Option A always means "top of the screen" — always show from row 0
+  // (the start of the question), even if that pushes option A's own
+  // cursor row below the fold on very long questions (the question alone
+  // can exceed the visible budget; one scroll down then reveals A).
+  // Without this, a long enough question would force the window to
+  // scroll down just to keep A's row on screen, hiding the question's
+  // opening lines even though the cursor is on the very first option.
+  if (selectedOption === 0) {
+    return 0;
+  }
+
   let start = 0;
   if (selEnd > maxVisibleLines - 1) {
     start = selEnd - maxVisibleLines + 1;
