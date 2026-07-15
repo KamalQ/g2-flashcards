@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   waitForEvenAppBridge,
   CreateStartUpPageContainer,
@@ -9,73 +9,52 @@ import {
   EventSourceType,
   LAUNCH_SOURCE_GLASSES_MENU,
 } from '@evenrealities/even_hub_sdk';
+import {
+  LETTERS,
+  truncate,
+  divider,
+  buildQuestionRows,
+  selectVisibleWindow,
+  renderRows,
+  formatDuration,
+} from '../lib/textLayout';
 
 // ─── Glasses display formatters (576×288) ───────────────────────────────────
 // 2-container layout:
 //   Container 1 (top bar):  question # and score
 //   Container 2 (main):     question + options or results
 
-const LETTERS = ['A', 'B', 'C', 'D'];
-
-function truncate(str, maxLen) {
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 2) + '..';
-}
-
-function wordWrap(text, maxChars) {
-  const words = text.split(' ');
-  const lines = [];
-  let line = '';
-  for (const word of words) {
-    if (line && (line + ' ' + word).length > maxChars) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = line ? line + ' ' + word : word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function formatMenu(deck, stats) {
+function formatMenu(deck, stats, deckIndex, deckCount, inProgressSnapshot) {
   const s = stats || {};
   const lines = [
     '',
     `  ${truncate(deck.name, 40)}`,
-    `  ${'━'.repeat(36)}`,
-    '',
+    `  ${divider()}`,
     `  ${deck.questions.length} questions`,
-    '',
   ];
 
   if (s.totalAttempts > 0) {
-    lines.push(`  Attempts: ${s.totalAttempts}`);
-    lines.push(`  Best score: ${s.bestScore}%`);
     const avgPct = Math.round((s.totalCorrect / s.totalQuestions) * 100);
-    lines.push(`  Avg score: ${avgPct}%`);
-    lines.push('');
+    lines.push(`  Best ${s.bestScore}% · Avg ${avgPct}% · ${s.totalAttempts} run${s.totalAttempts > 1 ? 's' : ''}`);
   }
 
-  lines.push('  ▶ Tap to start quiz');
+  lines.push('');
+  lines.push(inProgressSnapshot ? '  ▶ Tap to resume or restart' : '  ▶ Tap to start quiz');
   return lines.join('\n');
 }
 
-function formatQuestion(question, selectedOption) {
-  const qLines = wordWrap(question.question, 48);
-
-  const lines = [];
-  for (const l of qLines) {
-    lines.push(`  ${l}`);
-  }
-  lines.push('');
-
-  for (let i = 0; i < 4; i++) {
-    const cursor = i === selectedOption ? '▶' : ' ';
-    const label = `${cursor} ${LETTERS[i]}) ${truncate(question.options[i], 42)}`;
-    lines.push(` ${label}`);
-  }
-
+function formatMenuConfirm(deck, snapshot, cursor) {
+  const total = deck?.questions.length ?? 0;
+  const resumeLabel = snapshot ? `Resume  Q${snapshot.questionIndex + 1}/${total}` : 'Resume';
+  const lines = [
+    '',
+    `  ${truncate(deck?.name ?? '', 40)}`,
+    `  ${divider()}`,
+    `  ${cursor === 0 ? '▶' : ' '} ${resumeLabel}`,
+    `  ${cursor === 1 ? '▶' : ' '} Start New`,
+    '',
+    '  Tap to confirm ▶',
+  ];
   return lines.join('\n');
 }
 
@@ -102,35 +81,40 @@ function formatResult(question, chosen, isCorrect) {
   return lines.join('\n');
 }
 
-function formatSummary(answers, totalQuestions) {
+function formatSummary(answers, totalQuestions, totalDurationMs, missedCount, cursor) {
   const correct = answers.filter(a => a.isCorrect).length;
   const pct = Math.round((correct / totalQuestions) * 100);
 
   let grade = '';
-  if (pct >= 90) grade = '  ★ Excellent!';
-  else if (pct >= 70) grade = '  ● Great job!';
-  else if (pct >= 50) grade = '  ○ Keep studying';
-  else grade = '  △ Needs practice';
+  if (pct >= 90) grade = '★ Excellent!';
+  else if (pct >= 70) grade = '● Great job!';
+  else if (pct >= 50) grade = '○ Keep studying';
+  else grade = '△ Needs practice';
 
-  const filled = Math.round((pct / 100) * 36);
-  const bar = '█'.repeat(filled) + '▁'.repeat(36 - filled);
-
-  return [
+  const lines = [
     '',
     '  Quiz Complete!',
-    `  ${'━'.repeat(36)}`,
+    `  ${divider()}`,
+    `  ${correct}/${totalQuestions} (${pct}%) · ${formatDuration(totalDurationMs)}`,
+    `  ${grade}`,
     '',
-    `  Score: ${correct}/${totalQuestions} (${pct}%)`,
-    `  ${bar}`,
-    '',
-    grade,
-    '',
-    '  Tap to return ▶',
-  ].join('\n');
+  ];
+
+  if (missedCount > 0) {
+    lines.push(`  ${cursor === 0 ? '▶' : ' '} Return to menu`);
+    lines.push(`  ${cursor === 1 ? '▶' : ' '} Practice ${missedCount} missed`);
+  } else {
+    lines.push('  Tap to return ▶');
+  }
+
+  return lines.join('\n');
 }
 
-function formatHeader(phase, qIndex, totalQ, answers) {
-  if (phase === 'menu') return '  QUIZ CARDS';
+function formatHeader(phase, menuStep, qIndex, totalQ, answers, deckIndex, deckCount) {
+  if (phase === 'menu') {
+    if (menuStep === 'confirm') return '  RESUME OR START NEW?';
+    return deckCount > 1 ? `  Deck ${deckIndex + 1}/${deckCount}` : '  QUIZ CARDS';
+  }
   if (phase === 'summary') return '  RESULTS';
 
   const correct = answers.filter(a => a.isCorrect).length;
@@ -170,26 +154,33 @@ export default function useGlasses({ getQuizData }) {
   // ── Build display config from current quiz state ────────────────────────
   const buildConfig = useCallback(() => {
     const q = getQuizDataRef.current();
-    const header = formatHeader(q.phase, q.questionIndex, q.totalQuestions, q.answers);
+    const header = formatHeader(q.phase, q.menuStep, q.questionIndex, q.totalQuestions, q.answers, q.deckIndex, q.deckCount);
 
     let mainContent;
     switch (q.phase) {
-      case 'question':
-        mainContent = q.currentQuestion
-          ? formatQuestion(q.currentQuestion, q.selectedOption)
-          : '  Loading...';
+      case 'question': {
+        if (!q.currentQuestion) {
+          mainContent = '  Loading...';
+          break;
+        }
+        const rows = buildQuestionRows(q.currentQuestion, q.selectedOption);
+        const windowStart = selectVisibleWindow(rows, q.selectedOption);
+        mainContent = renderRows(rows, windowStart, q.selectedOption);
         break;
+      }
       case 'result':
         mainContent = q.currentQuestion
           ? formatResult(q.currentQuestion, q.chosenAnswer, q.answers[q.answers.length - 1]?.isCorrect)
           : '  Loading...';
         break;
       case 'summary':
-        mainContent = formatSummary(q.answers, q.totalQuestions);
+        mainContent = formatSummary(q.answers, q.totalQuestions, q.totalDurationMs, q.missedCount, q.selectedOption);
         break;
       case 'menu':
       default:
-        mainContent = formatMenu(q.deck, q.deckStats);
+        mainContent = q.menuStep === 'confirm'
+          ? formatMenuConfirm(q.deck, q.inProgressSnapshot, q.selectedOption)
+          : formatMenu(q.deck, q.deckStats, q.deckIndex, q.deckCount, q.inProgressSnapshot);
         break;
     }
 
@@ -350,7 +341,24 @@ export default function useGlasses({ getQuizData }) {
           setTimeout(() => pushContentRef.current?.(), 50);
         }
 
-        function handleDoubleTap(label) {
+        // Double-tap is contextual "back": mid-quiz -> deck menu (progress
+        // saved); resume/start-new confirm step -> back to browsing; already
+        // at the deck menu (or summary) -> exit the app. There's no
+        // long-press/long-hold event on this hardware (confirmed in the SDK's
+        // OsEventTypeList), so back and exit share this single gesture.
+        function handleDoubleTap(q, label) {
+          if (q.phase === 'menu' && q.menuStep === 'confirm') {
+            logEvent(`Double-tap (${label}) — back to deck browse`);
+            q.backToBrowse();
+            setTimeout(() => pushContentRef.current?.(), 50);
+            return;
+          }
+          if (q.phase === 'question' || q.phase === 'result') {
+            logEvent(`Double-tap (${label}) — back to menu (progress saved)`);
+            q.backToMenu();
+            setTimeout(() => pushContentRef.current?.(), 50);
+            return;
+          }
           logEvent(`Double-tap (${label}) — requesting exit`);
           bridge.shutDownPageContainer(1).catch(() => {});
         }
@@ -364,7 +372,7 @@ export default function useGlasses({ getQuizData }) {
           if (event.textEvent) {
             const et = event.textEvent.eventType;
             if (et === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-              handleDoubleTap('glasses');
+              handleDoubleTap(q, 'glasses');
             } else if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
               handleScroll(q, 'down', 'glasses');
             } else if (et === OsEventTypeList.SCROLL_TOP_EVENT) {
@@ -380,6 +388,7 @@ export default function useGlasses({ getQuizData }) {
             const et = event.sysEvent.eventType;
 
             if (et === OsEventTypeList.FOREGROUND_ENTER_EVENT) {
+              q.resumeTimer?.();
               lastContentRef.current = '';
               isPushingRef.current = false;
               pushContentRef.current?.();
@@ -389,7 +398,10 @@ export default function useGlasses({ getQuizData }) {
               isStartupCreatedRef.current = false;
               return;
             }
-            if (et === OsEventTypeList.FOREGROUND_EXIT_EVENT) return;
+            if (et === OsEventTypeList.FOREGROUND_EXIT_EVENT) {
+              q.pauseTimer?.();
+              return;
+            }
 
             const src = event.sysEvent.eventSource;
             const srcLabel = src === EventSourceType.TOUCH_EVENT_FROM_RING ? 'ring'
@@ -398,7 +410,7 @@ export default function useGlasses({ getQuizData }) {
               : 'sys';
 
             if (et === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-              handleDoubleTap(srcLabel);
+              handleDoubleTap(q, srcLabel);
             } else if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
               handleScroll(q, 'down', srcLabel);
             } else if (et === OsEventTypeList.SCROLL_TOP_EVENT) {

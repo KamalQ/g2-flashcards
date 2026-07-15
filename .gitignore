@@ -5,3 +5,4 @@ dist/
 .env
 .env.*
 *.ehpk
+sample questions.md

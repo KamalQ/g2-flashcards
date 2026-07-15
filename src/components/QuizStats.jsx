@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Card, Button } from 'even-toolkit/web';
+import { Card, Button, Badge, Progress, StatGrid, SectionHeader, EmptyState } from 'even-toolkit/web';
+import { LETTERS, formatDuration } from '../lib/textLayout';
 
-const LETTERS = ['A', 'B', 'C', 'D'];
-
-export default function QuizStats({ deck, stats, history, onReset, getDeckHistory }) {
+export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
   const [expandedSession, setExpandedSession] = useState(null);
 
   if (!deck) return null;
@@ -14,10 +13,11 @@ export default function QuizStats({ deck, stats, history, onReset, getDeckHistor
   if ((!deckStats || deckStats.totalAttempts === 0) && sessions.length === 0) {
     return (
       <Card padding="default">
-        <p style={sectionTitle}>Stats — {deck.name}</p>
-        <p style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
-          No attempts yet. Start a quiz on your glasses!
-        </p>
+        <SectionHeader title="Stats" />
+        <EmptyState
+          title="No attempts yet"
+          description="Start a quiz on your glasses to track your progress."
+        />
       </Card>
     );
   }
@@ -31,43 +31,40 @@ export default function QuizStats({ deck, stats, history, onReset, getDeckHistor
 
   return (
     <Card padding="default">
-      <p style={sectionTitle}>Stats — {deck.name}</p>
+      <SectionHeader title={`Stats — ${deck.name}`} />
 
-      {/* ── Aggregate stats grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <StatBox label="Attempts" value={deckStats?.totalAttempts ?? 0} />
-        <StatBox label="Best Score" value={`${deckStats?.bestScore ?? 0}%`} />
-        <StatBox label="Avg Score" value={`${avgPct}%`} />
-        <StatBox label="Last Played" value={lastPlayed} small />
-      </div>
+      {/* Aggregate stats */}
+      <StatGrid
+        columns={2}
+        stats={[
+          { label: 'Attempts', value: deckStats?.totalAttempts ?? 0 },
+          { label: 'Best Score', value: `${deckStats?.bestScore ?? 0}%` },
+          { label: 'Avg Score', value: `${avgPct}%` },
+          { label: 'Last Played', value: lastPlayed },
+        ]}
+      />
 
-      {/* ── Lifetime accuracy bar ── */}
+      {/* Accuracy progress bar */}
       {deckStats && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 14 }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             fontSize: 11,
             color: 'var(--color-text-dim)',
-            marginBottom: 4,
+            marginBottom: 6,
           }}>
             <span>Lifetime accuracy</span>
             <span>{deckStats.totalCorrect}/{deckStats.totalQuestions} correct</span>
           </div>
-          <div style={barTrack}>
-            <div style={{
-              ...barFill,
-              width: `${avgPct}%`,
-              background: avgPct >= 70 ? 'var(--color-accent)' : 'var(--color-accent-warning)',
-            }} />
-          </div>
+          <Progress value={avgPct} />
         </div>
       )}
 
-      {/* ── Session history ── */}
+      {/* Session history */}
       {sessions.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <p style={{ ...sectionTitle, marginBottom: 8 }}>Session History</p>
+          <SectionHeader title="Session History" />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sessions.map((session) => {
@@ -78,95 +75,59 @@ export default function QuizStats({ deck, stats, history, onReset, getDeckHistor
 
               return (
                 <div key={session.id}>
-                  {/* Session summary row */}
                   <div
+                    className="session-row"
                     onClick={() => setExpandedSession(isExpanded ? null : session.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: 6,
-                      background: 'var(--color-surface-raised)',
-                      border: '1px solid var(--color-border)',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
                   >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-dim)' }}>
-                        {dateStr}
-                      </div>
-                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--color-text-dim)' }}>
+                      {dateStr}
+                    </span>
 
-                    {/* Score badge */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}>
-                      <div style={{
-                        fontSize: 14,
-                        fontWeight: 400,
-                        color: session.pct >= 70 ? 'var(--color-accent)' : 'var(--color-accent-warning)',
-                      }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--color-text)' }}>
                         {session.score}/{session.total}
-                      </div>
-                      <div style={{
-                        fontSize: 12,
-                        fontWeight: 400,
-                        padding: '2px 8px',
-                        borderRadius: 10,
-                        background: session.pct >= 70 ? 'rgba(52,199,89,0.12)' : 'rgba(255,149,0,0.12)',
-                        color: session.pct >= 70 ? 'var(--color-accent)' : 'var(--color-accent-warning)',
-                      }}>
+                      </span>
+                      <Badge variant={session.pct >= 70 ? 'positive' : 'negative'}>
                         {session.pct}%
-                      </div>
+                      </Badge>
+                      {session.durationMs != null && (
+                        <span style={{ fontSize: 11, color: 'var(--color-text-dim)' }}>
+                          {formatDuration(session.durationMs)}
+                        </span>
+                      )}
                       <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>
                         {isExpanded ? '▲' : '▼'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Expanded detail — per-question breakdown */}
                   {isExpanded && session.answers && (
-                    <div style={{
-                      padding: '8px 10px',
-                      background: 'var(--color-surface)',
-                      border: '1px solid var(--color-border)',
-                      borderTop: 'none',
-                      borderRadius: '0 0 6px 6px',
-                      fontSize: 11,
-                      lineHeight: 1.8,
-                    }}>
+                    <div className="session-detail">
                       {session.answers.map((a, i) => {
-                        const qText = a.question.length > 50
-                          ? a.question.slice(0, 48) + '..'
+                        const qText = a.question.length > 55
+                          ? a.question.slice(0, 53) + '..'
                           : a.question;
                         return (
-                          <div key={i} style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: 6,
-                            paddingBottom: 4,
-                            borderBottom: i < session.answers.length - 1
-                              ? '1px solid var(--color-border)' : 'none',
-                            marginBottom: 4,
-                          }}>
-                            <span style={{
-                              flexShrink: 0,
-                              color: a.isCorrect ? 'var(--color-accent)' : 'var(--color-accent-warning)',
-                            }}>
-                              {a.isCorrect ? '●' : '○'}
-                            </span>
+                          <div key={i} className="session-detail-row">
+                            <Badge
+                              variant={a.isCorrect ? 'positive' : 'negative'}
+                              style={{ flexShrink: 0, fontSize: 10, padding: '1px 5px' }}
+                            >
+                              {a.isCorrect ? '✓' : '✗'}
+                            </Badge>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: 'var(--color-text)' }}>{qText}</div>
+                              <div style={{ color: 'var(--color-text)', fontSize: 12 }}>{qText}</div>
                               {!a.isCorrect && (
-                                <div style={{ color: 'var(--color-text-dim)', fontSize: 10 }}>
+                                <div style={{ color: 'var(--color-text-dim)', fontSize: 10, marginTop: 1 }}>
                                   Chose {LETTERS[a.chosen]} — Correct: {LETTERS[a.correct]}
                                 </div>
                               )}
                             </div>
+                            {a.durationMs != null && (
+                              <span style={{ fontSize: 10, color: 'var(--color-text-dim)', flexShrink: 0 }}>
+                                {formatDuration(a.durationMs)}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -182,59 +143,10 @@ export default function QuizStats({ deck, stats, history, onReset, getDeckHistor
       <Button
         variant="ghost"
         onClick={() => onReset(deck.name)}
-        style={{ width: '100%', marginTop: 10, fontSize: 12 }}
+        style={{ width: '100%', marginTop: 12, fontSize: 12 }}
       >
         Reset stats & history
       </Button>
     </Card>
-  );
-}
-
-// ── Shared styles ───────────────────────────────────────────────────────────
-const sectionTitle = {
-  fontSize: 11,
-  fontWeight: 400,
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  color: 'var(--color-text-dim)',
-  marginBottom: 10,
-};
-
-const barTrack = {
-  height: 8,
-  borderRadius: 4,
-  background: 'var(--color-border)',
-  overflow: 'hidden',
-};
-
-const barFill = {
-  height: '100%',
-  borderRadius: 4,
-  transition: 'width 0.3s',
-};
-
-function StatBox({ label, value, small = false }) {
-  return (
-    <div style={{
-      padding: '8px 10px',
-      borderRadius: 6,
-      background: 'var(--color-surface-raised)',
-      border: '1px solid var(--color-border)',
-    }}>
-      <div style={{
-        fontSize: 11,
-        color: 'var(--color-text-dim)',
-        marginBottom: 2,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: small ? 12 : 16,
-        fontWeight: 400,
-        color: 'var(--color-text)',
-      }}>
-        {value}
-      </div>
-    </div>
   );
 }

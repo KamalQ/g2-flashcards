@@ -5,16 +5,16 @@ import DeckList from './components/DeckList';
 import DeckImport from './components/DeckImport';
 import QuizStats from './components/QuizStats';
 import GlassesPreview from './components/GlassesPreview';
-import { Card } from 'even-toolkit/web';
+import { Card, Button, Badge, Progress, SectionHeader } from 'even-toolkit/web';
+import { formatDuration } from './lib/textLayout';
 import './App.css';
 
 export default function App() {
   const quiz = useQuiz();
 
-  // ── Stable getter so the glasses hook always reads fresh quiz state ──
-  // (Same pattern as world-clock's getCityData)
   const getQuizData = useCallback(() => ({
     phase: quiz.phase,
+    menuStep: quiz.menuStep,
     questionIndex: quiz.questionIndex,
     selectedOption: quiz.selectedOption,
     chosenAnswer: quiz.chosenAnswer,
@@ -22,19 +22,27 @@ export default function App() {
     currentQuestion: quiz.currentQuestion,
     totalQuestions: quiz.totalQuestions,
     deck: quiz.deck,
+    deckIndex: quiz.deckIndex,
+    deckCount: quiz.allDecks.length,
     deckStats: quiz.getDeckStats(quiz.deck?.name),
-    // Pass action functions so event handlers can call them
+    inProgressSnapshot: quiz.deck ? quiz.inProgress[quiz.deck.name] ?? null : null,
+    missedCount: quiz.missedCount,
+    totalDurationMs: quiz.totalDurationMs,
     confirmAnswer: quiz.confirmAnswer,
     moveOption: quiz.moveOption,
-  }), [quiz.phase, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer,
-       quiz.answers, quiz.currentQuestion, quiz.totalQuestions, quiz.deck,
-       quiz.confirmAnswer, quiz.moveOption, quiz.getDeckStats]);
+    backToMenu: quiz.backToMenu,
+    backToBrowse: quiz.backToBrowse,
+    pauseTimer: quiz.pauseTimer,
+    resumeTimer: quiz.resumeTimer,
+  }), [quiz.phase, quiz.menuStep, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer,
+       quiz.answers, quiz.currentQuestion, quiz.totalQuestions, quiz.deck, quiz.deckIndex,
+       quiz.allDecks.length, quiz.inProgress, quiz.missedCount, quiz.totalDurationMs,
+       quiz.confirmAnswer, quiz.moveOption, quiz.getDeckStats, quiz.backToMenu, quiz.backToBrowse,
+       quiz.pauseTimer, quiz.resumeTimer]);
 
   const glasses = useGlasses({ getQuizData });
 
-  // ── Periodic push interval (critical for real hardware) ──
-  // Retries if initial display creation failed, and keeps glasses in sync.
-  // Same pattern as world-clock: 1-second interval.
+  // Periodic push interval (critical for real hardware)
   const pushContentRef = useRef(glasses.pushContent);
   useEffect(() => { pushContentRef.current = glasses.pushContent; }, [glasses.pushContent]);
 
@@ -42,9 +50,9 @@ export default function App() {
     const id = setInterval(() => { pushContentRef.current?.(); }, 1000);
     pushContentRef.current?.();
     return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Force push when quiz state changes ──
+  // Force push on quiz state changes
   const isFirstMountRef = useRef(true);
   useEffect(() => {
     if (isFirstMountRef.current) {
@@ -52,72 +60,86 @@ export default function App() {
       return;
     }
     glasses.triggerPush();
-  }, [quiz.phase, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer, glasses.triggerPush]);
+  }, [quiz.phase, quiz.menuStep, quiz.deckIndex, quiz.questionIndex, quiz.selectedOption,
+      quiz.chosenAnswer, glasses.triggerPush]);
+
+  const correctCount = quiz.answers.filter(a => a.isCorrect).length;
+  const progressPct = quiz.totalQuestions > 0 ? ((quiz.questionIndex + 1) / quiz.totalQuestions) * 100 : 0;
 
   return (
     <div id="app-container">
-      {/* ── Title bar ── */}
-      <div style={{ padding: '12px 16px 0' }}>
-        <div style={{ fontSize: 20, fontWeight: 400, color: 'var(--color-text)' }}>
-          Quiz Cards
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-dim)', marginTop: 2 }}>
-          Study with your G2 glasses
-        </div>
+      {/* ── Hero ── */}
+      <div className="app-hero">
+        <h1>Quiz Cards</h1>
+        <div className="subtitle">Study with your G2 glasses</div>
       </div>
 
-      {/* ── Glasses preview & controls ── */}
+      {/* ── Glasses preview ── */}
       <GlassesPreview quiz={quiz} glasses={glasses} />
 
-      {/* ── Current quiz status (when active) ── */}
+      {/* ── Active quiz card ── */}
       {quiz.phase !== 'menu' && (
         <Card padding="default">
-          <p style={{
-            fontSize: 11,
-            fontWeight: 400,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'var(--color-text-dim)',
-            marginBottom: 6,
-          }}>
-            Active Quiz
-          </p>
-          <div style={{ fontSize: 14, color: 'var(--color-text)' }}>
-            {quiz.deck.name} — Question {quiz.questionIndex + 1}/{quiz.totalQuestions}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-dim)', marginTop: 2 }}>
-            Correct so far: {quiz.answers.filter(a => a.isCorrect).length}/{quiz.answers.length}
+          <SectionHeader
+            title="Active Quiz"
+            action={
+              <Badge variant={quiz.phase === 'summary' ? 'positive' : 'accent'}>
+                {quiz.phase === 'summary' ? 'Complete' : `Q${quiz.questionIndex + 1}/${quiz.totalQuestions}`}
+              </Badge>
+            }
+          />
+
+          <div style={{ fontSize: 14, color: 'var(--color-text)', marginBottom: 4 }}>
+            {quiz.deck.name}
           </div>
 
-          {/* Progress bar */}
           <div style={{
-            height: 6,
-            borderRadius: 3,
-            background: 'var(--color-border)',
-            marginTop: 8,
-            overflow: 'hidden',
+            fontSize: 12,
+            color: 'var(--color-text-dim)',
+            marginBottom: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}>
-            <div style={{
-              height: '100%',
-              width: `${((quiz.questionIndex + 1) / quiz.totalQuestions) * 100}%`,
-              borderRadius: 3,
-              background: 'var(--color-accent)',
-              transition: 'width 0.3s',
-            }} />
+            <span>Correct: {correctCount}/{quiz.answers.length}</span>
+            {quiz.answers.length > 0 && (
+              <Badge variant={correctCount / quiz.answers.length >= 0.7 ? 'positive' : 'negative'}>
+                {Math.round((correctCount / quiz.answers.length) * 100)}%
+              </Badge>
+            )}
+            {quiz.phase === 'summary' && (
+              <>
+                <span style={{ opacity: 0.3 }}>·</span>
+                <span>Time: {formatDuration(quiz.totalDurationMs)}</span>
+              </>
+            )}
           </div>
+
+          <Progress value={progressPct} />
+
+          {quiz.phase === 'summary' && quiz.missedCount > 0 && (
+            <Button
+              variant="highlight"
+              onClick={quiz.startMissedQuiz}
+              style={{ width: '100%', marginTop: 12 }}
+            >
+              Practice {quiz.missedCount} missed question{quiz.missedCount > 1 ? 's' : ''}
+            </Button>
+          )}
         </Card>
       )}
 
-      {/* ── Deck selector ── */}
+      {/* ── Decks ── */}
       <DeckList
         allDecks={quiz.allDecks}
         deckIndex={quiz.deckIndex}
         onSelect={quiz.selectDeck}
         onRemove={quiz.removeDeck}
         getDeckStats={quiz.getDeckStats}
+        inProgress={quiz.inProgress}
       />
 
-      {/* ── Stats & session history ── */}
+      {/* ── Stats & history ── */}
       <QuizStats
         deck={quiz.deck}
         stats={quiz.stats}
@@ -129,30 +151,11 @@ export default function App() {
       {/* ── Import ── */}
       <DeckImport onImport={quiz.importDeck} />
 
-      {/* ── Event log (debug) ── */}
+      {/* ── Event log (collapsible debug) ── */}
       {glasses.eventLog.length > 0 && (
         <Card padding="default">
-          <p style={{
-            fontSize: 11,
-            fontWeight: 400,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'var(--color-text-dim)',
-            marginBottom: 6,
-          }}>
-            Event Log
-          </p>
-          <div
-            className="event-log"
-            style={{
-              fontFamily: 'monospace',
-              fontSize: 10,
-              color: 'var(--color-text-dim)',
-              maxHeight: 120,
-              overflowY: 'auto',
-              lineHeight: 1.5,
-            }}
-          >
+          <SectionHeader title="Event Log" />
+          <div className="event-log">
             {glasses.eventLog.map((line, i) => (
               <div key={i}>{line}</div>
             ))}

@@ -1,97 +1,131 @@
-import { Card, Button } from 'even-toolkit/web';
+import { Card, Button, Badge, SectionHeader, StatusDot } from 'even-toolkit/web';
+import {
+  LETTERS,
+  buildQuestionRows,
+  selectVisibleWindow,
+  renderRows,
+  formatDuration,
+} from '../lib/textLayout';
 
 export default function GlassesPreview({ quiz, glasses }) {
-  const LETTERS = ['A', 'B', 'C', 'D'];
-
-  // Build a text preview of what's showing on glasses
   function getPreviewText() {
     const q = quiz;
     switch (q.phase) {
-      case 'menu':
-        return `${q.deck.name}\n${q.deck.questions.length} questions\n\nTap to start`;
-      case 'question':
-        if (!q.currentQuestion) return 'Loading...';
+      case 'menu': {
+        if (q.menuStep === 'confirm') {
+          const snapshot = q.inProgress?.[q.deck.name];
+          const resumeLabel = snapshot ? `Resume  Q${snapshot.questionIndex + 1}/${q.deck.questions.length}` : 'Resume';
+          return [
+            q.deck.name,
+            '',
+            `${q.selectedOption === 0 ? '▶' : ' '} ${resumeLabel}`,
+            `${q.selectedOption === 1 ? '▶' : ' '} Start New`,
+          ].join('\n');
+        }
+        const hasResume = !!q.inProgress?.[q.deck.name];
         return [
-          `Q${q.questionIndex + 1}/${q.totalQuestions}`,
+          `Deck ${q.deckIndex + 1}/${q.allDecks.length}`,
+          q.deck.name,
+          `${q.deck.questions.length} questions`,
           '',
-          q.currentQuestion.question,
-          '',
-          ...q.currentQuestion.options.map((opt, i) =>
-            `${i === q.selectedOption ? '►' : ' '} ${LETTERS[i]}) ${opt}`
-          ),
-        ].join('\n');
+          hasResume ? 'Tap to resume or restart' : 'Tap to start',
+          q.allDecks.length > 1 ? 'Scroll to browse decks' : '',
+        ].filter(Boolean).join('\n');
+      }
+      case 'question': {
+        if (!q.currentQuestion) return 'Loading...';
+        const rows = buildQuestionRows(q.currentQuestion, q.selectedOption);
+        const windowStart = selectVisibleWindow(rows, q.selectedOption);
+        const body = renderRows(rows, windowStart, q.selectedOption);
+        return `Q${q.questionIndex + 1}/${q.totalQuestions}\n\n${body}`;
+      }
       case 'result': {
         const last = q.answers[q.answers.length - 1];
-        if (!last || !q.currentQuestion) return 'Loading...';
+        if (!last || !q.currentQuestion) return '';
         return last.isCorrect
           ? `● Correct!\n\n${LETTERS[last.correct]}) ${q.currentQuestion.options[last.correct]}`
-          : `○ Incorrect\n\nYou chose: ${LETTERS[last.chosen]}) ${q.currentQuestion.options[last.chosen]}\nCorrect: ${LETTERS[last.correct]}) ${q.currentQuestion.options[last.correct]}`;
+          : `○ Incorrect\n\nYou chose: ${LETTERS[last.chosen]}\nCorrect: ${LETTERS[last.correct]}`;
       }
       case 'summary': {
         const correct = q.answers.filter(a => a.isCorrect).length;
         const pct = Math.round((correct / q.totalQuestions) * 100);
-        return `Quiz Complete!\n\nScore: ${correct}/${q.totalQuestions} (${pct}%)`;
+        const lines = [
+          'Quiz Complete!',
+          '',
+          `Score: ${correct}/${q.totalQuestions} (${pct}%)`,
+          `Time: ${formatDuration(q.totalDurationMs)}`,
+        ];
+        if (q.missedCount > 0) {
+          lines.push('');
+          lines.push(`${q.selectedOption === 0 ? '▶' : ' '} Return to menu`);
+          lines.push(`${q.selectedOption === 1 ? '▶' : ' '} Practice ${q.missedCount} missed`);
+        }
+        return lines.join('\n');
       }
       default:
         return '';
     }
   }
 
+  const isMidQuiz = quiz.phase === 'question' || quiz.phase === 'result';
+  const doubleTapDesc = isMidQuiz
+    ? 'Back (saves)'
+    : (quiz.phase === 'menu' && quiz.menuStep === 'confirm')
+      ? 'Back'
+      : 'Exit';
+
   return (
     <Card padding="default">
-      <p style={{
-        fontSize: 11,
-        fontWeight: 400,
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        color: 'var(--color-text-dim)',
-        marginBottom: 10,
-      }}>
-        Glasses Display
-      </p>
+      <SectionHeader
+        title="Glasses Display"
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <StatusDot connected={glasses.connected} />
+            <span style={{ fontSize: 11, color: 'var(--color-text-dim)' }}>
+              {glasses.connected ? 'Connected' : 'Preview'}
+            </span>
+          </div>
+        }
+      />
 
-      <div style={{ fontSize: 12, color: 'var(--color-text-dim)', marginBottom: 8 }}>
-        {glasses.status}
-      </div>
-
-      {/* Mini preview */}
-      <div style={{
-        background: '#1a2a1a',
-        color: '#4aff4a',
-        fontFamily: 'monospace',
-        fontSize: 10,
-        lineHeight: 1.4,
-        padding: 12,
-        borderRadius: 6,
-        whiteSpace: 'pre-wrap',
-        minHeight: 80,
-        maxHeight: 120,
-        overflow: 'hidden',
-      }}>
+      {/* Mini glasses preview */}
+      <div className="glasses-preview-screen">
         {getPreviewText()}
       </div>
 
       {/* Controls */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <Button variant="highlight" onClick={glasses.showDisplay} style={{ flex: 1 }}>
+      <div className="btn-row" style={{ marginTop: 10 }}>
+        <Button variant="highlight" onClick={glasses.showDisplay}>
           Refresh Display
         </Button>
-        <Button variant="ghost" onClick={glasses.shutdownGlasses}>
-          Exit
+        <Button variant="default" onClick={glasses.shutdownGlasses}>
+          Exit App
         </Button>
       </div>
 
-      {/* Interaction guide */}
+      {/* Controls legend */}
       <div style={{
-        fontSize: 11,
-        color: 'var(--color-text-dim)',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 6,
         marginTop: 10,
-        lineHeight: 1.6,
       }}>
-        <strong>Controls:</strong><br />
-        Scroll — move between A/B/C/D<br />
-        Tap — select answer / continue<br />
-        Double-tap — exit app
+        {[
+          { label: 'Scroll', desc: 'Move / browse' },
+          { label: 'Tap', desc: 'Select' },
+          { label: '2x Tap', desc: doubleTapDesc },
+        ].map(({ label, desc }) => (
+          <div key={label} style={{
+            textAlign: 'center',
+            padding: '6px 4px',
+            borderRadius: 6,
+            background: 'var(--color-surface-raised)',
+            border: '1px solid var(--color-border)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-text)' }}>{label}</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>{desc}</div>
+          </div>
+        ))}
       </div>
     </Card>
   );

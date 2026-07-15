@@ -3,7 +3,7 @@
 #app-container {
   max-width: 393px;
   margin: 0 auto;
-  padding: 0 0 32px;
+  padding: 0 0 40px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -11,11 +11,183 @@
   background: var(--color-background);
 }
 
-/* Scrollbar styling for the event log */
-.event-log::-webkit-scrollbar {
-  width: 4px;
+/* ── Top hero ── */
+.app-hero {
+  padding: 20px 16px 16px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 8%, transparent) 0%,
+    transparent 100%
+  );
 }
+
+.app-hero h1 {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--color-text);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-hero .subtitle {
+  font-size: 13px;
+  color: var(--color-text-dim);
+  margin-top: 2px;
+}
+
+/* ── Glasses mini-preview ── */
+.glasses-preview-screen {
+  background: #0a1a0a;
+  color: #3aee3a;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  min-height: 72px;
+  max-height: 100px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #3aee3a 20%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, #3aee3a 6%, transparent);
+}
+
+/* ── Deck list items ── */
+.deck-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.deck-item:active {
+  transform: scale(0.98);
+}
+
+.deck-item.active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+}
+
+.deck-item .deck-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-item .deck-meta {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deck-remove {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.deck-remove:hover {
+  opacity: 1;
+}
+
+/* ── Session history ── */
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.session-row:active {
+  transform: scale(0.98);
+}
+
+.session-detail {
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.session-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.session-detail-row:last-child {
+  border-bottom: none;
+}
+
+/* ── Event log ── */
+.event-log {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 10px;
+  color: var(--color-text-dim);
+  max-height: 100px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+.event-log::-webkit-scrollbar {
+  width: 3px;
+}
+
 .event-log::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 2px;
+}
+
+/* ── Button row helper ── */
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row > * {
+  flex: 1;
+}
+
+/* ── Format guide ── */
+.format-guide {
+  font-size: 11px;
+  line-height: 1.6;
+  background: var(--color-surface-raised);
+  padding: 14px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  margin-bottom: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
 }

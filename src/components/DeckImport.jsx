@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Card, Button } from 'even-toolkit/web';
+import { Card, Button, Textarea, SectionHeader } from 'even-toolkit/web';
 import { FORMAT_INSTRUCTIONS } from '../data/sampleDecks';
 
 export default function DeckImport({ onImport }) {
@@ -35,7 +35,6 @@ export default function DeckImport({ onImport }) {
       setSuccess(null);
     };
     reader.readAsText(file);
-    // Reset input so re-uploading same file works
     e.target.value = '';
   }
 
@@ -57,81 +56,61 @@ export default function DeckImport({ onImport }) {
 
   return (
     <Card padding="default">
-      <p style={{
-        fontSize: 11,
-        fontWeight: 400,
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        color: 'var(--color-text-dim)',
-        marginBottom: 10,
-      }}>
-        Import Deck
-      </p>
-
-      {/* Format toggle */}
-      <Button
-        variant="ghost"
-        onClick={() => setShowFormat((v) => !v)}
-        style={{ width: '100%', marginBottom: 8, fontSize: 13 }}
-      >
-        {showFormat ? 'Hide format guide' : 'Show format guide'}
-      </Button>
+      <SectionHeader
+        title="Import Deck"
+        action={
+          <Button
+            variant="ghost"
+            onClick={() => setShowFormat((v) => !v)}
+            style={{ fontSize: 11, padding: '4px 8px' }}
+          >
+            {showFormat ? 'Hide guide' : 'Format guide'}
+          </Button>
+        }
+      />
 
       {showFormat && (
-        <pre style={{
-          fontSize: 11,
-          lineHeight: 1.5,
-          background: 'var(--color-surface-raised)',
-          padding: 12,
-          borderRadius: 6,
-          overflowX: 'auto',
-          whiteSpace: 'pre-wrap',
-          color: 'var(--color-text-dim)',
-          marginBottom: 12,
-          border: '1px solid var(--color-border)',
-        }}>
-          {FORMAT_INSTRUCTIONS}
-        </pre>
+        <pre className="format-guide">{FORMAT_INSTRUCTIONS}</pre>
       )}
 
       {/* Text input */}
-      <textarea
+      <Textarea
         value={text}
         onChange={(e) => { setText(e.target.value); setError(null); setSuccess(null); }}
         placeholder="Paste JSON, CSV, or text format here..."
-        rows={6}
-        style={{
-          width: '100%',
-          fontFamily: 'monospace',
-          fontSize: 12,
-          padding: 10,
-          borderRadius: 6,
-          border: '1px solid var(--color-border)',
-          background: 'var(--color-surface)',
-          color: 'var(--color-text)',
-          resize: 'vertical',
-          boxSizing: 'border-box',
-        }}
+        rows={5}
+        error={error || false}
       />
 
+      {/* Error / success messages */}
+      {error && (
+        <p style={{ color: 'var(--color-accent-warning)', fontSize: 12, marginTop: 6 }}>
+          {error}
+        </p>
+      )}
+      {success && (
+        <p style={{ color: 'var(--color-accent)', fontSize: 12, marginTop: 6 }}>
+          {success}
+        </p>
+      )}
+
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <Button variant="highlight" onClick={handleImport} style={{ flex: 1 }}>
+      <div className="btn-row" style={{ marginTop: 10 }}>
+        <Button variant="highlight" onClick={handleImport}>
           Import Deck
         </Button>
         <Button variant="default" onClick={() => fileInputRef.current?.click()}>
           Upload File
         </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,.csv,.txt"
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-        />
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,.csv,.txt"
+        onChange={handleFileUpload}
+        style={{ display: 'none' }}
+      />
 
-      {/* Sample button */}
       <Button
         variant="ghost"
         onClick={() => { setText(sampleJSON); setError(null); setSuccess(null); }}
@@ -139,18 +118,6 @@ export default function DeckImport({ onImport }) {
       >
         Load sample JSON
       </Button>
-
-      {/* Status messages */}
-      {error && (
-        <p style={{ color: 'var(--color-accent-warning)', fontSize: 12, marginTop: 8 }}>
-          {error}
-        </p>
-      )}
-      {success && (
-        <p style={{ color: 'var(--color-accent)', fontSize: 12, marginTop: 8 }}>
-          {success}
-        </p>
-      )}
     </Card>
   );
 }
