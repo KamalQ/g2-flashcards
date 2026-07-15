@@ -7,12 +7,13 @@ import {
   TextContainerUpgrade,
   OsEventTypeList,
   EventSourceType,
+  LAUNCH_SOURCE_GLASSES_MENU,
 } from '@evenrealities/even_hub_sdk';
 
 // ─── Glasses display formatters (576×288) ───────────────────────────────────
-// We use a 2-container layout:
-//   Container 1 (top): header bar with question # and score
-//   Container 2 (main): question + options or results
+// 2-container layout:
+//   Container 1 (top bar):  question # and score
+//   Container 2 (main):     question + options or results
 
 const LETTERS = ['A', 'B', 'C', 'D'];
 
@@ -60,8 +61,7 @@ function formatMenu(deck, stats) {
   return lines.join('\n');
 }
 
-function formatQuestion(question, selectedOption, qIndex, totalQ) {
-  // Wrap question text to ~48 chars per line
+function formatQuestion(question, selectedOption) {
   const qLines = wordWrap(question.question, 48);
 
   const lines = [];
@@ -102,7 +102,7 @@ function formatResult(question, chosen, isCorrect) {
   return lines.join('\n');
 }
 
-function formatSummary(answers, totalQuestions, deckName) {
+function formatSummary(answers, totalQuestions) {
   const correct = answers.filter(a => a.isCorrect).length;
   const pct = Math.round((correct / totalQuestions) * 100);
 
@@ -112,7 +112,8 @@ function formatSummary(answers, totalQuestions, deckName) {
   else if (pct >= 50) grade = '  ○ Keep studying';
   else grade = '  △ Needs practice';
 
-  const bar = buildProgressBar(pct, 36);
+  const filled = Math.round((pct / 100) * 36);
+  const bar = '█'.repeat(filled) + '░'.repeat(36 - filled);
 
   return [
     '',
@@ -128,12 +129,6 @@ function formatSummary(answers, totalQuestions, deckName) {
   ].join('\n');
 }
 
-function buildProgressBar(pct, width) {
-  const filled = Math.round((pct / 100) * width);
-  const empty = width - filled;
-  return '█'.repeat(filled) + '░'.repeat(empty);
-}
-
 function formatHeader(phase, qIndex, totalQ, answers) {
   if (phase === 'menu') return '  QUIZ CARDS';
   if (phase === 'summary') return '  RESULTS';
@@ -141,14 +136,12 @@ function formatHeader(phase, qIndex, totalQ, answers) {
   const correct = answers.filter(a => a.isCorrect).length;
   const qNum = `Q${qIndex + 1}/${totalQ}`;
   const score = `Score: ${correct}/${answers.length}`;
-
-  // Pad to fill ~52 chars
   const spacing = ' '.repeat(Math.max(1, 46 - qNum.length - score.length));
   return `  ${qNum}${spacing}${score}`;
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
-export default function useGlasses({ quiz }) {
+export default function useGlasses({ getQuizData }) {
   const [status, setStatus] = useState('Waiting for bridge...');
   const [connected, setConnected] = useState(false);
   const [eventLog, setEventLog] = useState([]);
@@ -158,10 +151,11 @@ export default function useGlasses({ quiz }) {
   const lastContentRef = useRef('');
   const lastScrollRef = useRef(0);
   const isPushingRef = useRef(false);
+  const pushContentRef = useRef(null);
+  const getQuizDataRef = useRef(getQuizData);
 
-  // Keep quiz ref current so event handlers always see latest state
-  const quizRef = useRef(quiz);
-  useEffect(() => { quizRef.current = quiz; }, [quiz]);
+  // Keep getQuizDataRef current so stale closures always get fresh data
+  useEffect(() => { getQuizDataRef.current = getQuizData; }, [getQuizData]);
 
   const logEvent = useCallback((msg) => {
     const ts = new Date().toLocaleTimeString();
@@ -173,31 +167,30 @@ export default function useGlasses({ quiz }) {
     });
   }, []);
 
-  // ── Build display config ────────────────────────────────────────────────
+  // ── Build display config from current quiz state ────────────────────────
   const buildConfig = useCallback(() => {
-    const q = quizRef.current;
+    const q = getQuizDataRef.current();
     const header = formatHeader(q.phase, q.questionIndex, q.totalQuestions, q.answers);
 
     let mainContent;
     switch (q.phase) {
-      case 'menu':
-        mainContent = formatMenu(q.deck, q.getDeckStats(q.deck.name));
-        break;
       case 'question':
-        mainContent = formatQuestion(q.currentQuestion, q.selectedOption, q.questionIndex, q.totalQuestions);
+        mainContent = q.currentQuestion
+          ? formatQuestion(q.currentQuestion, q.selectedOption)
+          : '  Loading...';
         break;
       case 'result':
-        mainContent = formatResult(
-          q.currentQuestion,
-          q.chosenAnswer,
-          q.answers[q.answers.length - 1]?.isCorrect,
-        );
+        mainContent = q.currentQuestion
+          ? formatResult(q.currentQuestion, q.chosenAnswer, q.answers[q.answers.length - 1]?.isCorrect)
+          : '  Loading...';
         break;
       case 'summary':
-        mainContent = formatSummary(q.answers, q.totalQuestions, q.deck.name);
+        mainContent = formatSummary(q.answers, q.totalQuestions);
         break;
+      case 'menu':
       default:
-        mainContent = '  Loading...';
+        mainContent = formatMenu(q.deck, q.deckStats);
+        break;
     }
 
     return {
@@ -225,7 +218,7 @@ export default function useGlasses({ quiz }) {
     };
   }, []);
 
-  // ── Send / upgrade display ──────────────────────────────────────────────
+  // ── Send full page (create or rebuild) ──────────────────────────────────
   const sendPage = useCallback(async (config) => {
     const bridge = bridgeRef.current;
     if (!bridge) return;
@@ -235,6 +228,8 @@ export default function useGlasses({ quiz }) {
         if (rc === 0) {
           isStartupCreatedRef.current = true;
           logEvent('Display created');
+        } else {
+          logEvent(`createStartUp returned ${rc}`);
         }
       } else {
         await bridge.rebuildPageContainer(new RebuildPageContainer(config));
@@ -244,6 +239,7 @@ export default function useGlasses({ quiz }) {
     }
   }, [logEvent]);
 
+  // ── Upgrade text in-place (no flicker) ──────────────────────────────────
   const upgradeText = useCallback(async (text, containerId, containerName) => {
     const bridge = bridgeRef.current;
     if (!bridge) return false;
@@ -260,11 +256,15 @@ export default function useGlasses({ quiz }) {
     }
   }, []);
 
+  // ── Push content to glasses (called periodically + on state changes) ────
   const pushContent = useCallback(async () => {
-    if (!bridgeRef.current || isPushingRef.current) return;
+    if (!bridgeRef.current) return;
+    if (isPushingRef.current) return;
     isPushingRef.current = true;
     try {
       const config = buildConfig();
+
+      // Fingerprint to avoid redundant pushes
       const fingerprint = config.textObject.map(t => t.content).join('|');
       if (fingerprint === lastContentRef.current) return;
       lastContentRef.current = fingerprint;
@@ -274,11 +274,12 @@ export default function useGlasses({ quiz }) {
         return;
       }
 
-      // Try textContainerUpgrade first (flicker-free)
+      // Try in-place upgrade first (flicker-free on real hardware)
       const ok1 = await upgradeText(config.textObject[0].content, 1, 'header');
       const ok2 = await upgradeText(config.textObject[1].content, 2, 'main');
 
       if (!ok1 || !ok2) {
+        // Fall back to full rebuild
         await sendPage(config);
       }
     } finally {
@@ -286,9 +287,15 @@ export default function useGlasses({ quiz }) {
     }
   }, [buildConfig, sendPage, upgradeText]);
 
-  // Keep pushContent ref current for event handler
-  const pushContentRef = useRef(pushContent);
+  // Keep pushContentRef current for the event handler registered in the [] useEffect
   useEffect(() => { pushContentRef.current = pushContent; }, [pushContent]);
+
+  // ── Cache-busting push (forces refresh even if fingerprint unchanged) ───
+  const triggerPush = useCallback(() => {
+    lastContentRef.current = '';
+    isPushingRef.current = false;
+    pushContentRef.current?.();
+  }, []);
 
   // ── Bridge initialization & event handling ──────────────────────────────
   useEffect(() => {
@@ -298,7 +305,6 @@ export default function useGlasses({ quiz }) {
       try {
         const bridge = await waitForEvenAppBridge();
         bridgeRef.current = bridge;
-        quiz.setBridge(bridge);
 
         if (disposed) return;
         setStatus('Bridge connected');
@@ -313,101 +319,92 @@ export default function useGlasses({ quiz }) {
           isStartupCreatedRef.current = true;
           lastContentRef.current = config.textObject.map(t => t.content).join('|');
           logEvent('Initial display created');
+        } else {
+          logEvent(`Initial createStartUp returned ${rc} — will retry via interval`);
+        }
+
+        // Auto-initialize display when launched from glasses menu
+        bridge.onLaunchSource((source) => {
+          if (disposed) return;
+          if (source === LAUNCH_SOURCE_GLASSES_MENU) {
+            lastContentRef.current = '';
+            isPushingRef.current = false;
+            pushContentRef.current?.();
+            logEvent('Auto-launch from glasses menu');
+          }
+        });
+
+        // ── Shared event helpers ──
+        function handleAction(q, label) {
+          logEvent(`Tap (${label}) — phase: ${q.phase}, selected: ${q.selectedOption}`);
+          q.confirmAnswer();
+          setTimeout(() => pushContentRef.current?.(), 50);
+        }
+
+        function handleScroll(q, direction, label) {
+          const now = Date.now();
+          if (now - lastScrollRef.current < 300) return;
+          lastScrollRef.current = now;
+          logEvent(`Scroll ${direction} (${label})`);
+          q.moveOption(direction);
+          setTimeout(() => pushContentRef.current?.(), 50);
+        }
+
+        function handleDoubleTap(label) {
+          logEvent(`Double-tap (${label}) — requesting exit`);
+          bridge.shutDownPageContainer(1).catch(() => {});
         }
 
         // ── Event handler ──
         bridge.onEvenHubEvent((event) => {
           if (disposed) return;
-          const q = quizRef.current;
+          const q = getQuizDataRef.current();
 
-          // ── Text container events (our main container) ──
+          // ── Text container events ──
           if (event.textEvent) {
             const et = event.textEvent.eventType;
-
-            // Double-tap: exit with confirmation
             if (et === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-              logEvent('Double-tap — requesting exit');
-              bridge.shutDownPageContainer(1).catch(() => {});
-              return;
+              handleDoubleTap('glasses');
+            } else if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+              handleScroll(q, 'down', 'glasses');
+            } else if (et === OsEventTypeList.SCROLL_TOP_EVENT) {
+              handleScroll(q, 'up', 'glasses');
+            } else if (et === OsEventTypeList.CLICK_EVENT || et === undefined) {
+              handleAction(q, 'glasses');
             }
-
-            // Click (tap): confirm/select
-            if (et === OsEventTypeList.CLICK_EVENT || et === undefined) {
-              logEvent(`Tap — phase: ${q.phase}, selected: ${q.selectedOption}`);
-              q.confirmAnswer();
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
-            }
-
-            // Scroll: move cursor in question phase
-            if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-              const now = Date.now();
-              if (now - lastScrollRef.current < 300) return;
-              lastScrollRef.current = now;
-              logEvent('Scroll down');
-              q.moveOption('down');
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
-            }
-
-            if (et === OsEventTypeList.SCROLL_TOP_EVENT) {
-              const now = Date.now();
-              if (now - lastScrollRef.current < 300) return;
-              lastScrollRef.current = now;
-              logEvent('Scroll up');
-              q.moveOption('up');
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
-            }
+            return;
           }
 
-          // ── System events ──
+          // ── System events (ring, temple) ──
           if (event.sysEvent) {
             const et = event.sysEvent.eventType;
 
             if (et === OsEventTypeList.FOREGROUND_ENTER_EVENT) {
               lastContentRef.current = '';
+              isPushingRef.current = false;
               pushContentRef.current?.();
               return;
             }
-
             if (et === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
               isStartupCreatedRef.current = false;
               return;
             }
-
             if (et === OsEventTypeList.FOREGROUND_EXIT_EVENT) return;
 
-            // Ring/temple events
+            const src = event.sysEvent.eventSource;
+            const srcLabel = src === EventSourceType.TOUCH_EVENT_FROM_RING ? 'ring'
+              : src === EventSourceType.TOUCH_EVENT_FROM_GLASSES_R ? 'glasses-R'
+              : src === EventSourceType.TOUCH_EVENT_FROM_GLASSES_L ? 'glasses-L'
+              : 'sys';
+
             if (et === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-              logEvent('Double-tap (sys) — requesting exit');
-              bridge.shutDownPageContainer(1).catch(() => {});
-              return;
-            }
-
-            if (et === OsEventTypeList.CLICK_EVENT || et === undefined) {
-              logEvent(`Tap (sys) — phase: ${q.phase}`);
-              q.confirmAnswer();
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
-            }
-
-            if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
-              const now = Date.now();
-              if (now - lastScrollRef.current < 300) return;
-              lastScrollRef.current = now;
-              q.moveOption('down');
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
-            }
-
-            if (et === OsEventTypeList.SCROLL_TOP_EVENT) {
-              const now = Date.now();
-              if (now - lastScrollRef.current < 300) return;
-              lastScrollRef.current = now;
-              q.moveOption('up');
-              setTimeout(() => pushContentRef.current?.(), 50);
-              return;
+              handleDoubleTap(srcLabel);
+            } else if (et === OsEventTypeList.SCROLL_BOTTOM_EVENT) {
+              handleScroll(q, 'down', srcLabel);
+            } else if (et === OsEventTypeList.SCROLL_TOP_EVENT) {
+              handleScroll(q, 'up', srcLabel);
+            } else if (et === OsEventTypeList.CLICK_EVENT || et === undefined) {
+              handleAction(q, srcLabel);
             }
           }
         });
@@ -433,31 +430,29 @@ export default function useGlasses({ quiz }) {
     return () => { disposed = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Push whenever quiz state changes ────────────────────────────────────
-  useEffect(() => {
-    pushContentRef.current?.();
-  }, [quiz.phase, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer]);
-
   const shutdownGlasses = useCallback(async () => {
-    const bridge = bridgeRef.current;
-    if (!bridge) return;
-    await bridge.shutDownPageContainer(1);
-    logEvent('Shutdown requested');
+    try {
+      const bridge = bridgeRef.current;
+      if (!bridge) return;
+      await bridge.shutDownPageContainer(1);
+      setStatus('Shutdown requested');
+      logEvent('Graceful shutdown requested');
+    } catch (err) {
+      console.error('shutdown error:', err);
+    }
   }, [logEvent]);
 
   const showDisplay = useCallback(async () => {
     if (!bridgeRef.current) return;
     lastContentRef.current = '';
     await sendPage(buildConfig());
-    logEvent('Display refreshed');
+    setStatus('Display active');
+    logEvent('Display shown');
   }, [buildConfig, sendPage, logEvent]);
 
   return {
-    status,
-    connected,
-    eventLog,
-    shutdownGlasses,
-    showDisplay,
-    pushContent,
+    status, connected, eventLog,
+    shutdownGlasses, showDisplay,
+    pushContent, triggerPush,
   };
 }

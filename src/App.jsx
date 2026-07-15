@@ -1,15 +1,58 @@
+import { useCallback, useEffect, useRef } from 'react';
 import useQuiz from './hooks/useQuiz';
 import useGlasses from './hooks/useGlasses';
 import DeckList from './components/DeckList';
 import DeckImport from './components/DeckImport';
 import QuizStats from './components/QuizStats';
 import GlassesPreview from './components/GlassesPreview';
-import { Card, Button } from 'even-toolkit/web';
+import { Card } from 'even-toolkit/web';
 import './App.css';
 
 export default function App() {
   const quiz = useQuiz();
-  const glasses = useGlasses({ quiz });
+
+  // ── Stable getter so the glasses hook always reads fresh quiz state ──
+  // (Same pattern as world-clock's getCityData)
+  const getQuizData = useCallback(() => ({
+    phase: quiz.phase,
+    questionIndex: quiz.questionIndex,
+    selectedOption: quiz.selectedOption,
+    chosenAnswer: quiz.chosenAnswer,
+    answers: quiz.answers,
+    currentQuestion: quiz.currentQuestion,
+    totalQuestions: quiz.totalQuestions,
+    deck: quiz.deck,
+    deckStats: quiz.getDeckStats(quiz.deck?.name),
+    // Pass action functions so event handlers can call them
+    confirmAnswer: quiz.confirmAnswer,
+    moveOption: quiz.moveOption,
+  }), [quiz.phase, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer,
+       quiz.answers, quiz.currentQuestion, quiz.totalQuestions, quiz.deck,
+       quiz.confirmAnswer, quiz.moveOption, quiz.getDeckStats]);
+
+  const glasses = useGlasses({ getQuizData });
+
+  // ── Periodic push interval (critical for real hardware) ──
+  // Retries if initial display creation failed, and keeps glasses in sync.
+  // Same pattern as world-clock: 1-second interval.
+  const pushContentRef = useRef(glasses.pushContent);
+  useEffect(() => { pushContentRef.current = glasses.pushContent; }, [glasses.pushContent]);
+
+  useEffect(() => {
+    const id = setInterval(() => { pushContentRef.current?.(); }, 1000);
+    pushContentRef.current?.();
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Force push when quiz state changes ──
+  const isFirstMountRef = useRef(true);
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false;
+      return;
+    }
+    glasses.triggerPush();
+  }, [quiz.phase, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer, glasses.triggerPush]);
 
   return (
     <div id="app-container">
