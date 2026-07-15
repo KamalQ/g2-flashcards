@@ -57,7 +57,7 @@ function formatMenu(deck, stats) {
     lines.push('');
   }
 
-  lines.push('  ► Tap to start quiz');
+  lines.push('  ▶ Tap to start quiz');
   return lines.join('\n');
 }
 
@@ -71,7 +71,7 @@ function formatQuestion(question, selectedOption) {
   lines.push('');
 
   for (let i = 0; i < 4; i++) {
-    const cursor = i === selectedOption ? '►' : ' ';
+    const cursor = i === selectedOption ? '▶' : ' ';
     const label = `${cursor} ${LETTERS[i]}) ${truncate(question.options[i], 42)}`;
     lines.push(` ${label}`);
   }
@@ -97,7 +97,7 @@ function formatResult(question, chosen, isCorrect) {
   }
 
   lines.push('');
-  lines.push('  Tap to continue ►');
+  lines.push('  Tap to continue ▶');
 
   return lines.join('\n');
 }
@@ -113,7 +113,7 @@ function formatSummary(answers, totalQuestions) {
   else grade = '  △ Needs practice';
 
   const filled = Math.round((pct / 100) * 36);
-  const bar = '█'.repeat(filled) + '░'.repeat(36 - filled);
+  const bar = '█'.repeat(filled) + '▁'.repeat(36 - filled);
 
   return [
     '',
@@ -125,7 +125,7 @@ function formatSummary(answers, totalQuestions) {
     '',
     grade,
     '',
-    '  Tap to return ►',
+    '  Tap to return ▶',
   ].join('\n');
 }
 
@@ -203,7 +203,7 @@ export default function useGlasses({ getQuizData }) {
           content: header,
           isEventCapture: 0,
           borderWidth: 1,  borderColor: 8,
-          borderRdaius: 3, paddingLength: 4,
+          borderRadius: 3, paddingLength: 4,
         }),
         new TextContainerProperty({
           xPosition: 6,    yPosition: 42,
@@ -212,7 +212,7 @@ export default function useGlasses({ getQuizData }) {
           content: mainContent,
           isEventCapture: 1,
           borderWidth: 1,  borderColor: 5,
-          borderRdaius: 3, paddingLength: 4,
+          borderRadius: 3, paddingLength: 4,
         }),
       ],
     };
