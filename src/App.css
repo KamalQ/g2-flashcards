@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+#app-container {
+  max-width: 393px;
+  margin: 0 auto;
+  padding: 0 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100dvh;
+  background: var(--color-background);
+}
+
+/* Scrollbar styling for the event log */
+.event-log::-webkit-scrollbar {
+  width: 4px;
+}
+.event-log::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}

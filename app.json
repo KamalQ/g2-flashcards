@@ -1,0 +1,14 @@
+{
+  "package_id": "com.kamalq.flashcards",
+  "edition": "202601",
+  "name": "Quiz Cards",
+  "version": "1.0.0",
+  "min_app_version": "0.1.0",
+  "min_sdk_version": "0.1.0",
+  "tagline": "Study flashcards on your G2 glasses",
+  "description": "Multiple-choice quiz cards for the G2 glasses. Import custom decks in JSON, CSV, or text format. Scroll to pick A/B/C/D, tap to answer. Tracks scores and full session history locally.",
+  "author": "KamalQ",
+  "entrypoint": "index.html",
+  "supported_languages": ["en"],
+  "permissions": []
+}
