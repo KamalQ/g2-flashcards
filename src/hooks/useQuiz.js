@@ -127,6 +127,19 @@ const HISTORY_KEY = 'quiz_history';
 const DECK_KEY = 'quiz_deck';
 const CUSTOM_DECKS_KEY = 'quiz_custom_decks';
 const INPROGRESS_KEY = 'quiz_inprogress';
+const FOLDERS_KEY = 'quiz_folders';
+const FOLDER_ASSIGN_KEY = 'quiz_folder_assignments';
+const COLLAPSED_KEY = 'quiz_collapsed_folders';
+
+// Default folder setup — all DVA-C02 sample decks go into an "AWS" folder
+const DEFAULT_FOLDERS = [{ id: 'aws', name: 'AWS' }];
+function buildDefaultAssignments() {
+  const map = {};
+  SAMPLE_DECKS.forEach((d) => {
+    if (d.name.startsWith('AWS DVA-C02')) map[d.name] = 'aws';
+  });
+  return map;
+}
 
 function loadFromStorage(key, fallback) {
   try {
@@ -170,9 +183,45 @@ export default function useQuiz() {
   const [history, setHistory] = useState(() => loadFromStorage(HISTORY_KEY, []));
   const [inProgress, setInProgress] = useState(() => loadFromStorage(INPROGRESS_KEY, {})); // { [deckName]: snapshot }
 
+  // Folder organisation — stored separately from deck data so users can reorganise freely
+  const [folders, setFolders] = useState(() => loadFromStorage(FOLDERS_KEY, DEFAULT_FOLDERS));
+  const [folderAssignments, setFolderAssignments] = useState(() => {
+    const stored = loadFromStorage(FOLDER_ASSIGN_KEY, null);
+    return stored || buildDefaultAssignments();
+  });
+  const [collapsedFolders, setCollapsedFolders] = useState(() => loadFromStorage(COLLAPSED_KEY, {}));
+
   // Bridge ref for syncing stats
   const bridgeRef = useRef(null);
-  const setBridge = useCallback((bridge) => { bridgeRef.current = bridge; }, []);
+  const setBridge = useCallback(async (bridge) => {
+    bridgeRef.current = bridge;
+    // Hydrate from bridge storage — on a fresh webview launch, browser
+    // localStorage is empty but the bridge persists across restarts.
+    try {
+      const hydrationMap = [
+        [STATS_KEY, setStats],
+        [HISTORY_KEY, setHistory],
+        [CUSTOM_DECKS_KEY, setCustomDecks],
+        [INPROGRESS_KEY, setInProgress],
+        [FOLDERS_KEY, setFolders],
+        [FOLDER_ASSIGN_KEY, setFolderAssignments],
+        [COLLAPSED_KEY, setCollapsedFolders],
+      ];
+      for (const [key, setter] of hydrationMap) {
+        const local = localStorage.getItem(key);
+        if (!local || local === '{}' || local === '[]' || local === 'null') {
+          const bridgeVal = await bridge.getLocalStorage(key);
+          if (bridgeVal && bridgeVal !== 'null' && bridgeVal !== '{}' && bridgeVal !== '[]') {
+            const parsed = JSON.parse(bridgeVal);
+            localStorage.setItem(key, bridgeVal);
+            setter(parsed);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Bridge storage hydration error:', e);
+    }
+  }, []);
 
   // Per-question timer — plain refs (not state) so ticking doesn't cause re-renders
   const questionElapsedRef = useRef(0);
@@ -211,6 +260,9 @@ export default function useQuiz() {
   useEffect(() => { saveToStorage(CUSTOM_DECKS_KEY, customDecks); }, [customDecks]);
   useEffect(() => { saveToStorage(DECK_KEY, deckIndex); }, [deckIndex]);
   useEffect(() => { saveToStorage(INPROGRESS_KEY, inProgress); }, [inProgress]);
+  useEffect(() => { saveToStorage(FOLDERS_KEY, folders); }, [folders]);
+  useEffect(() => { saveToStorage(FOLDER_ASSIGN_KEY, folderAssignments); }, [folderAssignments]);
+  useEffect(() => { saveToStorage(COLLAPSED_KEY, collapsedFolders); }, [collapsedFolders]);
 
   // Also sync to bridge storage (persists on phone across app restarts)
   useEffect(() => {
@@ -220,8 +272,11 @@ export default function useQuiz() {
       bridge.setLocalStorage(HISTORY_KEY, JSON.stringify(history)).catch(() => {});
       bridge.setLocalStorage(CUSTOM_DECKS_KEY, JSON.stringify(customDecks)).catch(() => {});
       bridge.setLocalStorage(INPROGRESS_KEY, JSON.stringify(inProgress)).catch(() => {});
+      bridge.setLocalStorage(FOLDERS_KEY, JSON.stringify(folders)).catch(() => {});
+      bridge.setLocalStorage(FOLDER_ASSIGN_KEY, JSON.stringify(folderAssignments)).catch(() => {});
+      bridge.setLocalStorage(COLLAPSED_KEY, JSON.stringify(collapsedFolders)).catch(() => {});
     }
-  }, [stats, history, customDecks, inProgress]);
+  }, [stats, history, customDecks, inProgress, folders, folderAssignments, collapsedFolders]);
 
   // ── Deck management ─────────────────────────────────────────────────────
   const importDeck = useCallback((text) => {
@@ -324,7 +379,7 @@ export default function useQuiz() {
     setDeckIndex((prev) => {
       const n = allDecks.length;
       if (n === 0) return prev;
-      return direction === 'up' ? (prev > 0 ? prev - 1 : n - 1) : (prev < n - 1 ? prev + 1 : 0);
+      return direction === 'up' ? (prev > 0 ? prev - 1 : 0) : (prev < n - 1 ? prev + 1 : prev);
     });
   }, [allDecks.length]);
 
@@ -390,15 +445,18 @@ export default function useQuiz() {
       if (menuStep === 'browse') {
         browseDeck(direction);
       } else {
-        setSelectedOption((prev) => (prev === 0 ? 1 : 0));
+        // Clamp — don't wrap past first/last item
+        setSelectedOption((prev) =>
+          direction === 'up' ? Math.max(0, prev - 1) : Math.min(1, prev + 1)
+        );
       }
       return;
     }
 
     if (phase === 'question') {
       setSelectedOption((prev) => {
-        if (direction === 'up') return prev > 0 ? prev - 1 : 3;
-        return prev < 3 ? prev + 1 : 0;
+        if (direction === 'up') return prev > 0 ? prev - 1 : 0;
+        return prev < 3 ? prev + 1 : 3;
       });
       return;
     }
@@ -406,7 +464,10 @@ export default function useQuiz() {
     if (phase === 'summary') {
       const missedCount = answers.filter((a) => !a.isCorrect).length;
       if (missedCount > 0) {
-        setSelectedOption((prev) => (prev === 0 ? 1 : 0));
+        // Clamp — don't wrap past first/last item
+        setSelectedOption((prev) =>
+          direction === 'up' ? Math.max(0, prev - 1) : Math.min(1, prev + 1)
+        );
       }
       return;
     }
@@ -553,6 +614,45 @@ export default function useQuiz() {
   const missedCount = phase === 'summary' ? answers.filter(a => !a.isCorrect).length : 0;
   const totalDurationMs = answers.reduce((s, a) => s + (a.durationMs || 0), 0);
 
+  // ── Folder management ────────────────────────────────────────────────────
+  const createFolder = useCallback((name) => {
+    const id = 'folder_' + Date.now();
+    setFolders((prev) => [...prev, { id, name }]);
+    return id;
+  }, []);
+
+  const renameFolder = useCallback((folderId, name) => {
+    setFolders((prev) => prev.map((f) => f.id === folderId ? { ...f, name } : f));
+  }, []);
+
+  const deleteFolder = useCallback((folderId) => {
+    setFolders((prev) => prev.filter((f) => f.id !== folderId));
+    // Un-assign all decks in this folder
+    setFolderAssignments((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (next[key] === folderId) delete next[key];
+      }
+      return next;
+    });
+  }, []);
+
+  const moveDeckToFolder = useCallback((deckName, folderId) => {
+    setFolderAssignments((prev) => {
+      const next = { ...prev };
+      if (folderId == null) {
+        delete next[deckName];
+      } else {
+        next[deckName] = folderId;
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleFolderCollapsed = useCallback((folderId) => {
+    setCollapsedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
+  }, []);
+
   return {
     // Deck management
     allDecks,
@@ -586,6 +686,7 @@ export default function useQuiz() {
     pauseTimer,
     resumeTimer,
     setBridge,
+    saveInProgressSnapshot,
 
     // Stats & history
     stats,
@@ -594,5 +695,15 @@ export default function useQuiz() {
     getDeckHistory,
     resetStats,
     clearAllHistory,
+
+    // Folders
+    folders,
+    folderAssignments,
+    collapsedFolders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveDeckToFolder,
+    toggleFolderCollapsed,
   };
 }

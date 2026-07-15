@@ -125,7 +125,7 @@ function formatHeader(phase, menuStep, qIndex, totalQ, answers, deckIndex, deckC
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
-export default function useGlasses({ getQuizData }) {
+export default function useGlasses({ getQuizData, setBridge }) {
   const [status, setStatus] = useState('Waiting for bridge...');
   const [connected, setConnected] = useState(false);
   const [eventLog, setEventLog] = useState([]);
@@ -301,6 +301,9 @@ export default function useGlasses({ getQuizData }) {
         setStatus('Bridge connected');
         setConnected(true);
 
+        // Share bridge with useQuiz so it can persist/restore from bridge storage
+        setBridge?.(bridge);
+
         // Create initial display
         const config = buildConfig();
         const rc = await bridge.createStartUpPageContainer(
@@ -360,6 +363,8 @@ export default function useGlasses({ getQuizData }) {
             return;
           }
           logEvent(`Double-tap (${label}) — requesting exit`);
+          // Save any in-progress state before exiting
+          q.saveInProgressSnapshot?.();
           bridge.shutDownPageContainer(1).catch(() => {});
         }
 
@@ -400,6 +405,7 @@ export default function useGlasses({ getQuizData }) {
             }
             if (et === OsEventTypeList.FOREGROUND_EXIT_EVENT) {
               q.pauseTimer?.();
+              q.saveInProgressSnapshot?.();
               return;
             }
 

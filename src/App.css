@@ -109,6 +109,203 @@
   opacity: 1;
 }
 
+/* ── Folder organisation ── */
+.folder-group {
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.folder-header:active {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+}
+
+.folder-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.folder-chevron {
+  font-size: 14px;
+  color: var(--color-text-dim);
+  transition: transform 0.2s ease;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.folder-chevron.open {
+  transform: rotate(90deg);
+}
+
+.folder-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.folder-count {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.folder-action-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.folder-action-btn:hover {
+  opacity: 1;
+}
+
+.folder-contents {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 8px;
+}
+
+.folder-contents .deck-item {
+  border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.folder-empty {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  text-align: center;
+  padding: 12px 0;
+  opacity: 0.6;
+}
+
+.folder-rename-input {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  width: 120px;
+}
+
+.folder-divider-label {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 4px 2px;
+  opacity: 0.6;
+}
+
+.deck-move-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  line-height: 1;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.deck-move-btn:hover {
+  opacity: 1;
+}
+
+.folder-move-menu {
+  margin-top: 6px;
+  background: var(--color-surface-raised);
+  border: 1.5px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.folder-move-option {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.folder-move-option:last-child {
+  border-bottom: none;
+}
+
+.folder-move-option:active {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.folder-move-option.current {
+  color: var(--color-accent);
+  font-weight: 400;
+}
+
+.folder-move-option.current::before {
+  content: '\2713 ';
+}
+
+.new-folder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.new-folder-input {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.new-folder-input:focus {
+  border-color: var(--color-accent);
+}
+
+.new-folder-input::placeholder {
+  color: var(--color-text-dim);
+  opacity: 0.5;
+}
+
 /* ── Session history ── */
 .session-row {
   display: flex;

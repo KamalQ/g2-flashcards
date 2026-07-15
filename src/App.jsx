@@ -34,13 +34,14 @@ export default function App() {
     backToBrowse: quiz.backToBrowse,
     pauseTimer: quiz.pauseTimer,
     resumeTimer: quiz.resumeTimer,
+    saveInProgressSnapshot: quiz.saveInProgressSnapshot,
   }), [quiz.phase, quiz.menuStep, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer,
        quiz.answers, quiz.currentQuestion, quiz.totalQuestions, quiz.deck, quiz.deckIndex,
        quiz.allDecks.length, quiz.inProgress, quiz.missedCount, quiz.totalDurationMs,
        quiz.confirmAnswer, quiz.moveOption, quiz.getDeckStats, quiz.backToMenu, quiz.backToBrowse,
-       quiz.pauseTimer, quiz.resumeTimer]);
+       quiz.pauseTimer, quiz.resumeTimer, quiz.saveInProgressSnapshot]);
 
-  const glasses = useGlasses({ getQuizData });
+  const glasses = useGlasses({ getQuizData, setBridge: quiz.setBridge });
 
   // Periodic push interval (critical for real hardware)
   const pushContentRef = useRef(glasses.pushContent);
@@ -137,6 +138,14 @@ export default function App() {
         onRemove={quiz.removeDeck}
         getDeckStats={quiz.getDeckStats}
         inProgress={quiz.inProgress}
+        folders={quiz.folders}
+        folderAssignments={quiz.folderAssignments}
+        collapsedFolders={quiz.collapsedFolders}
+        onCreateFolder={quiz.createFolder}
+        onRenameFolder={quiz.renameFolder}
+        onDeleteFolder={quiz.deleteFolder}
+        onMoveDeck={quiz.moveDeckToFolder}
+        onToggleFolder={quiz.toggleFolderCollapsed}
       />
 
       {/* ── Stats & history ── */}
