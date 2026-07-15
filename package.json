@@ -11,7 +11,7 @@
     "sim": "vite --host --port 5174 & sleep 2 && npx @evenrealities/evenhub-simulator http://localhost:5174; kill %1 2>/dev/null"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.11",
+    "@evenrealities/even_hub_sdk": "^0.0.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "even-toolkit": "^1.7.7",
