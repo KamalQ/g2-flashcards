@@ -1,14 +1,53 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 auto-excludes .gitignore'd paths (node_modules) from its
+   class-name scan. even-toolkit's compiled component JS is what actually
+   uses classes like bg-accent/text-text/border-border internally, so
+   without this, Tailwind never sees those strings and generates no CSS for
+   them at all — the true cause of "buttons/inputs have no color or
+   border": it's not a missing color value, it's a missing utility class. */
+@source '../node_modules/even-toolkit/dist/web';
+
+/* Registers even-toolkit's design tokens (defined as plain CSS custom
+   properties in even-toolkit/web/theme-light.css) as Tailwind v4 theme
+   colors. Without this, utility classes even-toolkit's own components use
+   internally — bg-accent, text-text, bg-surface-light, border-border, etc.
+   — aren't recognized by Tailwind's generator and produce no CSS at all,
+   leaving buttons/inputs/cards with no background, text, or border color.
+   `inline` keeps these as live references to the runtime custom properties
+   (rather than baking in a value at build time), so swapping in
+   theme-dark.css still works without rebuilding. */
+@theme inline {
+  --color-accent: var(--color-accent);
+  --color-accent-alpha: var(--color-accent-alpha);
+  --color-accent-warning: var(--color-accent-warning);
+  --color-bg: var(--color-bg);
+  --color-border: var(--color-border);
+  --color-border-light: var(--color-border-light);
+  --color-input-bg: var(--color-input-bg);
+  --color-negative: var(--color-negative);
+  --color-negative-alpha: var(--color-negative-alpha);
+  --color-overlay: var(--color-overlay);
+  --color-positive: var(--color-positive);
+  --color-positive-alpha: var(--color-positive-alpha);
+  --color-surface: var(--color-surface);
+  --color-surface-light: var(--color-surface-light);
+  --color-surface-lighter: var(--color-surface-lighter);
+  --color-text: var(--color-text);
+  --color-text-highlight: var(--color-text-highlight);
+  --color-text-dim: var(--color-text-dim);
+  --color-text-muted: var(--color-text-muted);
+}
+
 #app-container {
   max-width: 393px;
   margin: 0 auto;
   padding: 0 0 40px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px; /* cards sit close together — a thin hairline break, not a thick gray band */
   min-height: 100dvh;
-  background: var(--color-background);
+  background: var(--color-bg);
 }
 
 /* ── Top hero ── */

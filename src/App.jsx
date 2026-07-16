@@ -20,6 +20,8 @@ export default function App() {
     chosenAnswer: quiz.chosenAnswer,
     answers: quiz.answers,
     currentQuestion: quiz.currentQuestion,
+    questionReadOffset: quiz.questionReadOffset,
+    resultScrollOffset: quiz.resultScrollOffset,
     totalQuestions: quiz.totalQuestions,
     deck: quiz.deck,
     deckIndex: quiz.deckIndex,
@@ -36,7 +38,8 @@ export default function App() {
     resumeTimer: quiz.resumeTimer,
     saveInProgressSnapshot: quiz.saveInProgressSnapshot,
   }), [quiz.phase, quiz.menuStep, quiz.questionIndex, quiz.selectedOption, quiz.chosenAnswer,
-       quiz.answers, quiz.currentQuestion, quiz.totalQuestions, quiz.deck, quiz.deckIndex,
+       quiz.answers, quiz.currentQuestion, quiz.questionReadOffset, quiz.resultScrollOffset,
+       quiz.totalQuestions, quiz.deck, quiz.deckIndex,
        quiz.allDecks.length, quiz.inProgress, quiz.missedCount, quiz.totalDurationMs,
        quiz.confirmAnswer, quiz.moveOption, quiz.getDeckStats, quiz.backToMenu, quiz.backToBrowse,
        quiz.pauseTimer, quiz.resumeTimer, quiz.saveInProgressSnapshot]);
@@ -80,9 +83,10 @@ export default function App() {
 
       {/* ── Active quiz card ── */}
       {quiz.phase !== 'menu' && (
-        <Card padding="default">
+        <Card padding="sm">
           <SectionHeader
             title="Active Quiz"
+            className="mt-0"
             action={
               <Badge variant={quiz.phase === 'summary' ? 'positive' : 'accent'}>
                 {quiz.phase === 'summary' ? 'Complete' : `Q${quiz.questionIndex + 1}/${quiz.totalQuestions}`}
@@ -162,8 +166,8 @@ export default function App() {
 
       {/* ── Event log (collapsible debug) ── */}
       {glasses.eventLog.length > 0 && (
-        <Card padding="default">
-          <SectionHeader title="Event Log" />
+        <Card padding="sm">
+          <SectionHeader title="Event Log" className="mt-0" />
           <div className="event-log">
             {glasses.eventLog.map((line, i) => (
               <div key={i}>{line}</div>

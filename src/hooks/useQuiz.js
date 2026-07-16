@@ -178,6 +178,21 @@ export default function useQuiz() {
   const [answers, setAnswers] = useState([]); // Array of { questionIdx, chosen, correct, isCorrect, durationMs }
   const [shuffledOrder, setShuffledOrder] = useState(null); // Shuffled question indices
 
+  // Scroll-paging offsets for content too long to fit the visible budget —
+  // questionReadOffset only applies while selectedOption === 0 (paging
+  // through a long question before landing on option A); resultScrollOffset
+  // paginates the post-answer result screen. Ephemeral view state: never
+  // persisted in the in-progress snapshot, always reset to 0 whenever phase
+  // changes (see resetScrollOffsets — called at every setPhase site) so a
+  // resumed or freshly-started question/result screen never renders
+  // pre-scrolled from stale state.
+  const [questionReadOffset, setQuestionReadOffset] = useState(0);
+  const [resultScrollOffset, setResultScrollOffset] = useState(0);
+  const resetScrollOffsets = useCallback(() => {
+    setQuestionReadOffset(0);
+    setResultScrollOffset(0);
+  }, []);
+
   // Persistent stats per deck + full session history + resumable in-progress snapshots
   const [stats, setStats] = useState(() => loadFromStorage(STATS_KEY, {}));
   const [history, setHistory] = useState(() => loadFromStorage(HISTORY_KEY, []));
@@ -332,7 +347,8 @@ export default function useQuiz() {
     setSelectedOption(0);
     setAnswers([]);
     setShuffledOrder(null);
-  }, [saveInProgressSnapshot]);
+    resetScrollOffsets();
+  }, [saveInProgressSnapshot, resetScrollOffsets]);
 
   // ── Quiz flow ───────────────────────────────────────────────────────────
   const shuffleArray = (arr) => {
@@ -358,7 +374,8 @@ export default function useQuiz() {
     setAnswers([]);
     startQuestionTimer();
     setPhase('question');
-  }, [deck, startQuestionTimer]);
+    resetScrollOffsets();
+  }, [deck, startQuestionTimer, resetScrollOffsets]);
 
   const startMissedQuiz = useCallback(() => {
     const missed = answers.filter((a) => !a.isCorrect);
@@ -403,7 +420,8 @@ export default function useQuiz() {
     setActiveDeckOverride(null);
     if (snapshot.phase === 'question') startQuestionTimer();
     setPhase(snapshot.phase);
-  }, [startQuestionTimer]);
+    resetScrollOffsets();
+  }, [startQuestionTimer, resetScrollOffsets]);
 
   const confirmMenuChoice = useCallback(() => {
     const target = allDecks[deckIndex];
@@ -438,9 +456,14 @@ export default function useQuiz() {
     setActiveDeckOverride(null);
     setPhase('menu');
     setMenuStep('browse');
-  }, [saveInProgressSnapshot]);
+    resetScrollOffsets();
+  }, [saveInProgressSnapshot, resetScrollOffsets]);
 
-  const moveOption = useCallback((direction) => {
+  // `maxOffset`/`pageStep` are supplied by the caller (useGlasses.js), which
+  // owns the text-layout row-building functions — useQuiz.js stays
+  // layout-agnostic and just tracks an integer offset within the bounds
+  // it's given.
+  const moveOption = useCallback((direction, { maxOffset = 0, pageStep = 1 } = {}) => {
     if (phase === 'menu') {
       if (menuStep === 'browse') {
         browseDeck(direction);
@@ -454,10 +477,37 @@ export default function useQuiz() {
     }
 
     if (phase === 'question') {
+      // While on option A and the question is too long to fit alongside
+      // it, page through the question text first; only once already at
+      // the paging limit does scroll fall through to the normal A->D
+      // cursor movement below.
+      if (selectedOption === 0 && maxOffset > 0) {
+        if (direction === 'down' && questionReadOffset < maxOffset) {
+          setQuestionReadOffset((prev) => Math.min(maxOffset, prev + pageStep));
+          return;
+        }
+        if (direction === 'up' && questionReadOffset > 0) {
+          setQuestionReadOffset((prev) => Math.max(0, prev - pageStep));
+          return;
+        }
+        if (direction === 'up') return; // already at top of A — no-op, matches today
+        // direction === 'down' at the paging limit falls through to A->B below
+      }
+      setQuestionReadOffset(0);
       setSelectedOption((prev) => {
         if (direction === 'up') return prev > 0 ? prev - 1 : 0;
         return prev < 3 ? prev + 1 : 3;
       });
+      return;
+    }
+
+    if (phase === 'result') {
+      // Linear content, no cursor — just page through it if it overflows.
+      if (direction === 'down' && resultScrollOffset < maxOffset) {
+        setResultScrollOffset((prev) => Math.min(maxOffset, prev + pageStep));
+      } else if (direction === 'up' && resultScrollOffset > 0) {
+        setResultScrollOffset((prev) => Math.max(0, prev - pageStep));
+      }
       return;
     }
 
@@ -471,8 +521,7 @@ export default function useQuiz() {
       }
       return;
     }
-    // 'result' — no cursor, no-op
-  }, [phase, menuStep, answers, browseDeck]);
+  }, [phase, menuStep, answers, browseDeck, selectedOption, questionReadOffset, resultScrollOffset]);
 
   const confirmAnswer = useCallback(() => {
     if (phase === 'menu') {
@@ -496,6 +545,7 @@ export default function useQuiz() {
         durationMs,
       }]);
       setPhase('result');
+      resetScrollOffsets();
       return;
     }
 
@@ -505,6 +555,7 @@ export default function useQuiz() {
         // Quiz complete
         setPhase('summary');
         setSelectedOption(0); // cursor reused as the generic 2-item summary selector
+        resetScrollOffsets();
         const deckKey = deck.name;
         const finalCorrect = answers.filter(a => a.isCorrect).length;
         const pct = Math.round((finalCorrect / totalQuestions) * 100);
@@ -539,6 +590,7 @@ export default function useQuiz() {
               answers: answers.map(a => ({
                 questionIdx: a.questionIdx,
                 question: deck.questions[a.questionIdx]?.question ?? '',
+                options: deck.questions[a.questionIdx]?.options ?? [],
                 chosen: a.chosen,
                 correct: a.correct,
                 isCorrect: a.isCorrect,
@@ -563,6 +615,7 @@ export default function useQuiz() {
         setChosenAnswer(null);
         startQuestionTimer();
         setPhase('question');
+        resetScrollOffsets();
       }
       return;
     }
@@ -575,11 +628,13 @@ export default function useQuiz() {
         setPhase('menu');
         setMenuStep('browse');
         setActiveDeckOverride(null);
+        resetScrollOffsets();
       }
       return;
     }
   }, [phase, menuStep, selectedOption, currentQuestion, questionIndex, deck, answers, shuffledOrder,
-      activeDeckOverride, selectBrowsedDeck, confirmMenuChoice, startMissedQuiz, startQuestionTimer, stopQuestionTimer]);
+      activeDeckOverride, selectBrowsedDeck, confirmMenuChoice, startMissedQuiz, startQuestionTimer, stopQuestionTimer,
+      resetScrollOffsets]);
 
   const getDeckStats = useCallback((deckName) => {
     return stats[deckName] || { totalAttempts: 0, totalCorrect: 0, totalQuestions: 0, bestScore: 0, lastPlayed: null };
@@ -671,6 +726,8 @@ export default function useQuiz() {
     chosenAnswer,
     answers,
     currentQuestion,
+    questionReadOffset,
+    resultScrollOffset,
     totalQuestions: deck?.questions.length ?? 0,
     inProgress,
     missedCount,

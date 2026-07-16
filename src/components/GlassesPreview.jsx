@@ -1,9 +1,11 @@
 import { Card, Button, Badge, SectionHeader, StatusDot } from 'even-toolkit/web';
 import {
-  LETTERS,
   buildQuestionRows,
   selectVisibleWindow,
   renderRows,
+  buildResultRows,
+  maxResultScrollOffset,
+  renderResultRows,
   formatDuration,
 } from '../lib/textLayout';
 
@@ -35,16 +37,16 @@ export default function GlassesPreview({ quiz, glasses }) {
       case 'question': {
         if (!q.currentQuestion) return 'Loading...';
         const rows = buildQuestionRows(q.currentQuestion, q.selectedOption);
-        const windowStart = selectVisibleWindow(rows, q.selectedOption);
+        const windowStart = selectVisibleWindow(rows, q.selectedOption, q.questionReadOffset);
         const body = renderRows(rows, windowStart, q.selectedOption);
         return `Q${q.questionIndex + 1}/${q.totalQuestions}\n\n${body}`;
       }
       case 'result': {
         const last = q.answers[q.answers.length - 1];
         if (!last || !q.currentQuestion) return '';
-        return last.isCorrect
-          ? `● Correct!\n\n${LETTERS[last.correct]}) ${q.currentQuestion.options[last.correct]}`
-          : `○ Incorrect\n\nYou chose: ${LETTERS[last.chosen]}\nCorrect: ${LETTERS[last.correct]}`;
+        const resultRows = buildResultRows(q.currentQuestion, q.chosenAnswer, last.isCorrect);
+        const resultWindowStart = Math.min(Math.max(0, q.resultScrollOffset ?? 0), maxResultScrollOffset(resultRows));
+        return renderResultRows(resultRows, resultWindowStart);
       }
       case 'summary': {
         const correct = q.answers.filter(a => a.isCorrect).length;
@@ -75,9 +77,10 @@ export default function GlassesPreview({ quiz, glasses }) {
       : 'Exit';
 
   return (
-    <Card padding="default">
+    <Card padding="sm">
       <SectionHeader
         title="Glasses Display"
+        className="mt-0"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <StatusDot connected={glasses.connected} />
@@ -98,7 +101,7 @@ export default function GlassesPreview({ quiz, glasses }) {
         <Button variant="highlight" onClick={glasses.showDisplay}>
           Refresh Display
         </Button>
-        <Button variant="default" onClick={glasses.shutdownGlasses}>
+        <Button variant="default" className="border border-border" onClick={glasses.shutdownGlasses}>
           Exit App
         </Button>
       </div>

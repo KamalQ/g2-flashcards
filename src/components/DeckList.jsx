@@ -147,8 +147,8 @@ export default function DeckList({
   }
 
   return (
-    <Card padding="default">
-      <SectionHeader title="Decks" />
+    <Card padding="sm">
+      <SectionHeader title="Decks" className="mt-0" />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* ── Folders ── */}

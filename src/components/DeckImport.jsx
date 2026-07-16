@@ -55,9 +55,10 @@ export default function DeckImport({ onImport }) {
   }, null, 2);
 
   return (
-    <Card padding="default">
+    <Card padding="sm">
       <SectionHeader
         title="Import Deck"
+        className="mt-0"
         action={
           <Button
             variant="ghost"
@@ -80,6 +81,7 @@ export default function DeckImport({ onImport }) {
         placeholder="Paste JSON, CSV, or text format here..."
         rows={5}
         error={error || false}
+        className="border border-text"
       />
 
       {/* Error / success messages */}
@@ -99,7 +101,7 @@ export default function DeckImport({ onImport }) {
         <Button variant="highlight" onClick={handleImport}>
           Import Deck
         </Button>
-        <Button variant="default" onClick={() => fileInputRef.current?.click()}>
+        <Button variant="default" className="border border-border" onClick={() => fileInputRef.current?.click()}>
           Upload File
         </Button>
       </div>

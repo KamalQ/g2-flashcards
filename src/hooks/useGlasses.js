@@ -10,13 +10,17 @@ import {
   LAUNCH_SOURCE_GLASSES_MENU,
 } from '@evenrealities/even_hub_sdk';
 import {
-  LETTERS,
   truncate,
   divider,
   buildQuestionRows,
   selectVisibleWindow,
   renderRows,
+  buildResultRows,
+  maxReadOffsetForOptionA,
+  maxResultScrollOffset,
+  renderResultRows,
   formatDuration,
+  PAGE_STEP,
 } from '../lib/textLayout';
 
 // ─── Glasses display formatters (576×288) ───────────────────────────────────
@@ -55,29 +59,6 @@ function formatMenuConfirm(deck, snapshot, cursor) {
     '',
     '  Tap to confirm ▶',
   ];
-  return lines.join('\n');
-}
-
-function formatResult(question, chosen, isCorrect) {
-  const icon = isCorrect ? '●' : '○';
-  const verdict = isCorrect ? 'Correct!' : 'Incorrect';
-
-  const lines = [
-    '',
-    `  ${icon} ${verdict}`,
-    '',
-  ];
-
-  if (!isCorrect) {
-    lines.push(`  You chose: ${LETTERS[chosen]}) ${truncate(question.options[chosen], 36)}`);
-    lines.push(`  Correct:   ${LETTERS[question.answer]}) ${truncate(question.options[question.answer], 36)}`);
-  } else {
-    lines.push(`  ${LETTERS[question.answer]}) ${truncate(question.options[question.answer], 40)}`);
-  }
-
-  lines.push('');
-  lines.push('  Tap to continue ▶');
-
   return lines.join('\n');
 }
 
@@ -164,15 +145,21 @@ export default function useGlasses({ getQuizData, setBridge }) {
           break;
         }
         const rows = buildQuestionRows(q.currentQuestion, q.selectedOption);
-        const windowStart = selectVisibleWindow(rows, q.selectedOption);
+        const windowStart = selectVisibleWindow(rows, q.selectedOption, q.questionReadOffset);
         mainContent = renderRows(rows, windowStart, q.selectedOption);
         break;
       }
-      case 'result':
-        mainContent = q.currentQuestion
-          ? formatResult(q.currentQuestion, q.chosenAnswer, q.answers[q.answers.length - 1]?.isCorrect)
-          : '  Loading...';
+      case 'result': {
+        if (!q.currentQuestion) {
+          mainContent = '  Loading...';
+          break;
+        }
+        const isCorrect = q.answers[q.answers.length - 1]?.isCorrect;
+        const resultRows = buildResultRows(q.currentQuestion, q.chosenAnswer, isCorrect);
+        const resultWindowStart = Math.min(Math.max(0, q.resultScrollOffset), maxResultScrollOffset(resultRows));
+        mainContent = renderResultRows(resultRows, resultWindowStart);
         break;
+      }
       case 'summary':
         mainContent = formatSummary(q.answers, q.totalQuestions, q.totalDurationMs, q.missedCount, q.selectedOption);
         break;
@@ -340,7 +327,21 @@ export default function useGlasses({ getQuizData, setBridge }) {
           if (now - lastScrollRef.current < 300) return;
           lastScrollRef.current = now;
           logEvent(`Scroll ${direction} (${label})`);
-          q.moveOption(direction);
+
+          // Long question/result text pages via scroll before (question) or
+          // instead of (result) moving a cursor — compute how far paging is
+          // allowed to go so useQuiz.js's moveOption stays layout-agnostic.
+          let maxOffset = 0;
+          if (q.phase === 'question' && q.currentQuestion && q.selectedOption === 0) {
+            const rows = buildQuestionRows(q.currentQuestion, 0);
+            maxOffset = maxReadOffsetForOptionA(rows);
+          } else if (q.phase === 'result' && q.currentQuestion) {
+            const isCorrect = q.answers[q.answers.length - 1]?.isCorrect;
+            const resultRows = buildResultRows(q.currentQuestion, q.chosenAnswer, isCorrect);
+            maxOffset = maxResultScrollOffset(resultRows);
+          }
+
+          q.moveOption(direction, { maxOffset, pageStep: PAGE_STEP });
           setTimeout(() => pushContentRef.current?.(), 50);
         }
 

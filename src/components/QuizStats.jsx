@@ -12,8 +12,8 @@ export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
 
   if ((!deckStats || deckStats.totalAttempts === 0) && sessions.length === 0) {
     return (
-      <Card padding="default">
-        <SectionHeader title="Stats" />
+      <Card padding="sm">
+        <SectionHeader title="Stats" className="mt-0" />
         <EmptyState
           title="No attempts yet"
           description="Start a quiz on your glasses to track your progress."
@@ -30,8 +30,8 @@ export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
     : 'Never';
 
   return (
-    <Card padding="default">
-      <SectionHeader title={`Stats — ${deck.name}`} />
+    <Card padding="sm">
+      <SectionHeader title={`Stats — ${deck.name}`} className="mt-0" />
 
       {/* Aggregate stats */}
       <StatGrid
@@ -104,9 +104,11 @@ export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
                   {isExpanded && session.answers && (
                     <div className="session-detail">
                       {session.answers.map((a, i) => {
-                        const qText = a.question.length > 55
-                          ? a.question.slice(0, 53) + '..'
-                          : a.question;
+                        // Full option text was only captured into history
+                        // starting with this feature — older sessions fall
+                        // back to letter-only.
+                        const chosenText = a.options?.[a.chosen];
+                        const correctText = a.options?.[a.correct];
                         return (
                           <div key={i} className="session-detail-row">
                             <Badge
@@ -116,10 +118,13 @@ export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
                               {a.isCorrect ? '✓' : '✗'}
                             </Badge>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: 'var(--color-text)', fontSize: 12 }}>{qText}</div>
+                              <div style={{ color: 'var(--color-text)', fontSize: 12 }}>{a.question}</div>
+                              <div style={{ color: 'var(--color-text-dim)', fontSize: 11, marginTop: 3 }}>
+                                Chose: {LETTERS[a.chosen]}{chosenText ? `) ${chosenText}` : ''}
+                              </div>
                               {!a.isCorrect && (
-                                <div style={{ color: 'var(--color-text-dim)', fontSize: 10, marginTop: 1 }}>
-                                  Chose {LETTERS[a.chosen]} — Correct: {LETTERS[a.correct]}
+                                <div style={{ color: 'var(--color-text-dim)', fontSize: 11, marginTop: 1 }}>
+                                  Correct: {LETTERS[a.correct]}{correctText ? `) ${correctText}` : ''}
                                 </div>
                               )}
                             </div>
