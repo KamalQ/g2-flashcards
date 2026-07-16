@@ -105,10 +105,15 @@ export default function QuizStats({ deck, stats, onReset, getDeckHistory }) {
                     <div className="session-detail">
                       {session.answers.map((a, i) => {
                         // Full option text was only captured into history
-                        // starting with this feature — older sessions fall
-                        // back to letter-only.
-                        const chosenText = a.options?.[a.chosen];
-                        const correctText = a.options?.[a.correct];
+                        // starting with this feature — sessions saved before
+                        // that fall back to looking the options up on the
+                        // current deck by questionIdx, so old sessions still
+                        // show full text as long as the deck itself hasn't
+                        // changed since (only bare letters if that lookup
+                        // also comes up empty, e.g. a deleted custom deck).
+                        const deckOptions = deck?.questions?.[a.questionIdx]?.options;
+                        const chosenText = a.options?.[a.chosen] ?? deckOptions?.[a.chosen];
+                        const correctText = a.options?.[a.correct] ?? deckOptions?.[a.correct];
                         return (
                           <div key={i} className="session-detail-row">
                             <Badge
